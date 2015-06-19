@@ -57,8 +57,8 @@ public class ChatClient implements ChatClientObservable {
         new Thread(clientThread).start();
     }
 
-    public void doLogin(String name) {
-        clientThread.sendMessage(new ChatCommand(ChatCommandClient.CLIENT_LOGIN, name));
+    public void doLogin(String name, int port) {
+        clientThread.sendMessage(new ChatCommand(ChatCommandClient.CLIENT_LOGIN, new ChatLoginInfo(name, port)));
     }
 
     public void doLogout() {

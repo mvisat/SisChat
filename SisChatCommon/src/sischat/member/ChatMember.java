@@ -8,6 +8,7 @@ package sischat.member;
 import sischat.room.*;
 
 import java.io.Serializable;
+import java.net.InetAddress;
 
 /**
  *
@@ -17,10 +18,14 @@ public class ChatMember implements Serializable {
     private int id;
     private String name;
     private int roomID = ChatRoom.INVALID_ROOM_ID;
+    private InetAddress address;
+    private int p2pPort = 0;
 
-    public ChatMember(int id, String name) {
+    public ChatMember(int id, String name, InetAddress address, int port) {
         this.id = id;
         this.name = name;
+        this.address = address;
+        this.p2pPort = port;
     }
 
     public int getID() {
@@ -37,6 +42,18 @@ public class ChatMember implements Serializable {
 
     public void setRoomID(int roomID) {
         this.roomID = roomID;
+    }
+
+    public InetAddress getAddress() {
+        return this.address;
+    }
+
+    public void setP2PPort(int port) {
+        this.p2pPort = port;
+    }
+
+    public int getP2PPort() {
+        return this.p2pPort;
     }
 
     @Override

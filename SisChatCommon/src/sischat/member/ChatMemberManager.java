@@ -5,6 +5,7 @@
  */
 package sischat.member;
 
+import java.net.InetAddress;
 import sischat.room.*;
 
 import java.util.*;
@@ -19,7 +20,7 @@ public class ChatMemberManager {
     private static BitSet availableID = new BitSet();
     private static HashSet<String> usernames = new HashSet<>();
 
-    public static synchronized ChatMember add(String name) {
+    public static synchronized ChatMember add(String name, InetAddress address, int port) {
         if (usernames.contains(name.toLowerCase())) {
             return null;
         }
@@ -32,7 +33,7 @@ public class ChatMemberManager {
                 return null;
             availableID.set(latestID);
             usernames.add(name.toLowerCase());
-            return new ChatMember(latestID, name);
+            return new ChatMember(latestID, name, address, port);
         }
     }
 

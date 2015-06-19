@@ -9,20 +9,26 @@ import java.util.List;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.util.HashMap;
 import javax.swing.*;
 import javax.swing.text.*;
 import sischat.member.ChatMember;
 import sischat.msg.ChatMessage;
+import sischat.p2p.P2PClient;
+import sischat.p2p.P2PListener;
+import sischat.p2p.P2PServer;
 import sischat.room.ChatRoom;
 
 /**
  *
  * @author Visat
  */
-public class ChatClientUI extends javax.swing.JFrame implements ChatClientListener {
+public class ChatClientUI extends javax.swing.JFrame implements ChatClientListener, P2PListener {
     private ChatMember myself = null;
     private ChatClient chatClient = new ChatClient();
     private DefaultListModel listMember = new DefaultListModel();
+    private P2PServer p2pServer;
+    private HashMap<ChatMember, ChatP2P> p2pMap = new HashMap<>();
 
     /**
      * Creates new form ChatClientUI
@@ -31,31 +37,41 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
         initComponents();
         resetComponents();
         chatClient.addListener(this);
+        initP2PServer();
+    }
+
+    private void initP2PServer() {
+        p2pServer = new P2PServer();
+        p2pServer.addListener(this);
     }
 
     private void resetComponents() {
         resetPanelServer();
+        setEnabledComponents(panelServer, true);
+
         resetPanelUser();
+        setEnabledComponents(panelUser, false);
+
         resetPanelRoom();
+        setEnabledComponents(panelRoom, false);
+
         resetPanelMessage();
+        setEnabledComponents(panelMessage, false);
     }
 
     private void resetPanelServer() {
         buttonConnect.setText("Connect");
-        setEnabledComponents(panelServer, true);
     }
 
     private void resetPanelUser() {
         textUsername.setText("");
         buttonLogin.setText("Login");
         textRoomName.setText("");
-        setEnabledComponents(panelUser, false);
     }
 
     private void resetPanelRoom() {
         buttonJoinLeaveRoom.setText("Join");
         boxRoomList.removeAllItems();
-        setEnabledComponents(panelRoom, false);
     }
 
     private void resetPanelMessage() {
@@ -63,7 +79,7 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
         textMessagePane.setText("");
         textMessage.setText("");
         listMember.removeAllElements();
-        setEnabledComponents(panelMessage, false);
+        buttonPrivateChat.setEnabled(false);
     }
 
     private void setEnabledComponents(Container container, boolean enabled) {
@@ -167,8 +183,8 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
         buttonJoinLeaveRoom.setText("Leave");
         buttonJoinLeaveRoom.setEnabled(true);
         setEnabledComponents(panelMessage, true);
+        resetPanelMessage();
         labelChatRoom.setText("Chat Room - " + room.getName());
-        listMember.removeAllElements();
         for (ChatMember member: room.getMembers())
             listMember.addElement(member);
         textMessage.requestFocus();
@@ -219,6 +235,8 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
         myself = null;
         resetPanelMessage();
         resetPanelRoom();
+        setEnabledComponents(panelMessage, false);
+        setEnabledComponents(panelRoom, false);
         setEnabledComponents(panelUser, true);
         buttonLogin.setText("Login");
     }
@@ -226,6 +244,7 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
     @Override
     public void onRoomLeave(ChatClient sender) {
         resetPanelMessage();
+        setEnabledComponents(panelMessage, false);
         setEnabledComponents(panelRoom, true);
         buttonJoinLeaveRoom.setText("Join");
         buttonJoinLeaveRoom.setEnabled(false);
@@ -236,6 +255,50 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
     public void onDisconnected(ChatClient sender) {
         showDialogError("Error", "Sorry, you are disconnected from server.");
         resetComponents();
+    }
+
+    @Override
+    public void onConnected(ChatMember member) {
+        if (!p2pMap.containsKey(member)) {
+            if (member != myself) {
+                P2PClient client = new P2PClient(myself, member);
+                if (client.connect()) {
+                    ChatP2P p2p = new ChatP2P(client);
+                    p2p.setLocationRelativeTo(this);
+                    p2p.setVisible(true);
+                    p2pMap.put(member, p2p);
+                    client.doLogin();
+                    System.out.println("doLogin");
+                }
+                else {
+                    showDialogError("Error", "Sorry, failed to initiate private chat with " + member.getName() + ".");
+                }
+            }
+            else {
+                showDialogError("Error", "Sorry, you can't chat with yourself.");
+            }
+        }
+        else {
+            p2pMap.get(member).setVisible(true);
+        }
+    }
+
+    @Override
+    public void onDisconnected(ChatMember member) {
+        /*
+        if (p2pMap.containsKey(member)) {
+            p2pMap.get(member).dispose();
+            p2pMap.remove(member);
+        }
+        */
+    }
+
+    @Override
+    public void onMessage(ChatMessage message) {
+        System.out.println("on P2PMessage");
+        if (p2pMap.containsKey(message.getSender())) {
+            p2pMap.get(message.getSender()).onMessage(message);
+        }
     }
 
     /**
@@ -278,6 +341,7 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
         jLabel2 = new javax.swing.JLabel();
         jScrollPane3 = new javax.swing.JScrollPane();
         textMessagePane = new javax.swing.JTextPane();
+        buttonPrivateChat = new javax.swing.JButton();
 
         menuPrivateMessage.setText("jMenuItem1");
         menuPrivateMessage.addActionListener(new java.awt.event.ActionListener() {
@@ -290,6 +354,11 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("SisChat");
         setName("frameMain"); // NOI18N
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            public void windowClosed(java.awt.event.WindowEvent evt) {
+                formWindowClosed(evt);
+            }
+        });
 
         labelServerAddress.setHorizontalAlignment(javax.swing.SwingConstants.TRAILING);
         labelServerAddress.setLabelFor(textServerAddress);
@@ -465,6 +534,11 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
                 listRoomMemberMouseReleased(evt);
             }
         });
+        listRoomMember.addListSelectionListener(new javax.swing.event.ListSelectionListener() {
+            public void valueChanged(javax.swing.event.ListSelectionEvent evt) {
+                listRoomMemberValueChanged(evt);
+            }
+        });
         jScrollPane2.setViewportView(listRoomMember);
 
         textMessage.addActionListener(new java.awt.event.ActionListener() {
@@ -488,6 +562,13 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
         textMessagePane.setEditable(false);
         jScrollPane3.setViewportView(textMessagePane);
 
+        buttonPrivateChat.setText("Private Chat");
+        buttonPrivateChat.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                buttonPrivateChatActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout panelMessageLayout = new javax.swing.GroupLayout(panelMessage);
         panelMessage.setLayout(panelMessageLayout);
         panelMessageLayout.setHorizontalGroup(
@@ -506,7 +587,8 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(panelMessageLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 124, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(jLabel2))
+                    .addComponent(jLabel2)
+                    .addComponent(buttonPrivateChat, javax.swing.GroupLayout.PREFERRED_SIZE, 124, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addContainerGap())
         );
         panelMessageLayout.setVerticalGroup(
@@ -517,13 +599,13 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
                     .addComponent(jLabel2))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(panelMessageLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(panelMessageLayout.createSequentialGroup()
-                        .addComponent(jScrollPane3)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addGroup(panelMessageLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                            .addComponent(textMessage, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(buttonSend)))
-                    .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 203, Short.MAX_VALUE))
+                    .addComponent(jScrollPane3)
+                    .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 174, Short.MAX_VALUE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(panelMessageLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(textMessage, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(buttonSend)
+                    .addComponent(buttonPrivateChat))
                 .addContainerGap())
         );
 
@@ -598,6 +680,9 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
         buttonConnect.setEnabled(true);
         if (connected) {
             textUsername.requestFocus();
+            p2pServer.connect();
+            p2pServer.start();
+            System.out.println("PORT: " + p2pServer.getPort());
             chatClient.start();
         }
     }//GEN-LAST:event_buttonConnectActionPerformed
@@ -612,13 +697,14 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
         if (chatClient.isConnected()) {
             if (chatClient.isLoggedIn()) {
                 chatClient.doLogout();
+                p2pServer.disconnect();
                 myself = null;
             }
             else {
                 textUsername.setText(textUsername.getText().trim());
                 String username = textUsername.getText();
                 if (username.length() > 0)
-                    chatClient.doLogin(username);
+                    chatClient.doLogin(username, p2pServer.getPort());
                 else
                     textUsername.requestFocus();
             }
@@ -701,8 +787,25 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
 
     private void menuPrivateMessageActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_menuPrivateMessageActionPerformed
         // TODO: Chat via P2P
-        System.out.println(evt.getActionCommand());
+        if (!listRoomMember.isSelectionEmpty()) {
+            ChatMember member = (ChatMember)listRoomMember.getSelectedValue();
+            onConnected(member);
+        }
     }//GEN-LAST:event_menuPrivateMessageActionPerformed
+
+    private void buttonPrivateChatActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonPrivateChatActionPerformed
+        if (!listRoomMember.isSelectionEmpty())
+            onConnected((ChatMember)listRoomMember.getSelectedValue());
+    }//GEN-LAST:event_buttonPrivateChatActionPerformed
+
+    private void listRoomMemberValueChanged(javax.swing.event.ListSelectionEvent evt) {//GEN-FIRST:event_listRoomMemberValueChanged
+        buttonPrivateChat.setEnabled(!listRoomMember.isSelectionEmpty() && listRoomMember.getSelectedValue() != myself);
+    }//GEN-LAST:event_listRoomMemberValueChanged
+
+    private void formWindowClosed(java.awt.event.WindowEvent evt) {//GEN-FIRST:event_formWindowClosed
+        p2pServer.disconnect();
+        chatClient.disconnect();
+    }//GEN-LAST:event_formWindowClosed
 
     /**
      * @param args the command line arguments
@@ -713,9 +816,6 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | javax.swing.UnsupportedLookAndFeelException ex) {
             java.util.logging.Logger.getLogger(ChatClientUI.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         }
-        //</editor-fold>
-
-        //</editor-fold>
 
         /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
@@ -734,6 +834,7 @@ public class ChatClientUI extends javax.swing.JFrame implements ChatClientListen
     private javax.swing.JButton buttonCreateRoom;
     private javax.swing.JButton buttonJoinLeaveRoom;
     private javax.swing.JButton buttonLogin;
+    private javax.swing.JButton buttonPrivateChat;
     private javax.swing.JButton buttonRefreshRoom;
     private javax.swing.JButton buttonSend;
     private javax.swing.JLabel jLabel2;

@@ -144,8 +144,9 @@ public class ChatServer {
 		switch (cmdClient) {
 
 		case CLIENT_LOGIN:
-            System.out.println("CLIENT_LOGIN " + (String)message);
-			if ((member != null) || ((member = ChatMemberManager.add((String)message)) == null)) {
+            ChatLoginInfo loginInfo = (ChatLoginInfo)message;
+            System.out.println("CLIENT_LOGIN " + loginInfo.getName());
+			if ((member != null) || ((member = ChatMemberManager.add(loginInfo.getName(), socket.getInetAddress(), loginInfo.getPort())) == null)) {
                 keepRunning = sendMessage(
                         new ChatCommand(ChatCommandServer.SERVER_LOGIN_FAIL, null));
             }
